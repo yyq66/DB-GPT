@@ -1,4 +1,5 @@
 export const ChatEn = {
+  create_conversation: 'Create Conversation',
   chat_online: 'chat Online',
   dialog_list: 'Dialog List',
   delete_chat: 'Delete Chat',

@@ -104,7 +104,7 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className='flex flex-col flex-1 relative overflow-hidden'>{children}</div>
-        <FloatHelper />
+        {/* <FloatHelper /> */}
       </div>
     );
   };

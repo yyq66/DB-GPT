@@ -94,11 +94,11 @@ const MenuItem: React.FC<{
             app_code: item.app_code,
           }),
         );
-        router.push(item.default ? '/chat' : `?scene=${item.chat_mode}&id=${item.conv_uid}`);
+        router.push(item.default ? '/chat' : `/chat/?scene=${item.chat_mode}&id=${item.conv_uid}`);
       }}
     >
       <Tooltip title={item.chat_mode}>
-        <div className='flex items-center justify-center w-8 h-8 rounded-lg mr-3 bg-white'>{item.icon}</div>
+        <div className='flex items-center justify-center w-8 h-8 rounded-lg mr-3'>{item.icon}</div>
       </Tooltip>
       <div className='flex flex-1 line-clamp-1'>
         <Typography.Text
@@ -118,7 +118,7 @@ const MenuItem: React.FC<{
             }}
           >
             <ShareAltOutlined
-              style={{ fontSize: 16 }}
+              style={{ fontSize: 18 }}
               onClick={() => {
                 const success = copy(`${location.origin}/chat?scene=${item.chat_mode}&id=${item.conv_uid}`);
                 message[success ? 'success' : 'error'](success ? t('copy_success') : t('copy_failed'));
@@ -132,7 +132,7 @@ const MenuItem: React.FC<{
               handleDelChat();
             }}
           >
-            <DeleteOutlined style={{ fontSize: 16 }} />
+            <DeleteOutlined style={{ fontSize: 18 }} />
           </div>
         </div>
       )}
@@ -191,9 +191,9 @@ const ChatSider: React.FC<{
 
   return (
     <Sider
-      className='bg-[#ffffff80]  border-r  border-[#d5e5f6] dark:bg-[#ffffff29] dark:border-[#ffffff66]'
+      className='dark:bg-[#242734]'
       theme={mode}
-      width={280}
+      width={230}
       collapsible={true}
       collapsed={collapsed}
       collapsedWidth={0}
@@ -201,20 +201,20 @@ const ChatSider: React.FC<{
       zeroWidthTriggerStyle={triggerStyle}
       onCollapse={collapsed => setCollapsed(collapsed)}
     >
-      <div className='flex flex-col h-full w-full bg-transparent px-4 pt-6  '>
-        <div className='w-full text-base font-semibold text-[#1c2533] dark:text-[rgba(255,255,255,0.85)] mb-4 line-clamp-1'>
+      <div className='flex flex-col h-full w-full bg-transparent'>
+        {/* <div className='w-full text-base font-semibold text-[#1c2533] dark:text-[rgba(255,255,255,0.85)] mb-4 line-clamp-1'>
           {t('dialog_list')}
-        </div>
+        </div> */}
         <Flex flex={1} vertical={true} className='overflow-y-auto'>
-          <MenuItem
+          {/* <MenuItem
             item={{
               label: t('assistant'),
               key: 'default',
-              icon: <Image src='/LOGO_SMALL.png' alt='default' width={24} height={24} className='flex-1' />,
+              icon: <Image src='zhuoshi_logo.png' alt='default' width={24} height={24} className='flex-1' />,
               default: true,
             }}
             order={order}
-          />
+          /> */}
           <Spin spinning={listLoading} className='mt-2'>
             {!!items?.length &&
               items.map(item => (

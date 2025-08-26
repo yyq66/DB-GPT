@@ -9,6 +9,9 @@ import { useTranslation } from 'react-i18next';
 import { UserChatContent } from '@/types/chat';
 import { parseResourceValue } from '@/utils';
 import ToolsBar from './ToolsBar';
+import dynamic from 'next/dynamic';
+
+const VoiceInput = dynamic(() => import('@/new-components/chat/input/VoiceInput'), { ssr: false, });  
 
 const ChatInputPanel: React.ForwardRefRenderFunction<any, { ctrl: AbortController }> = ({ ctrl }, ref) => {
   const { t } = useTranslation();
@@ -31,12 +34,24 @@ const ChatInputPanel: React.ForwardRefRenderFunction<any, { ctrl: AbortControlle
   const [userInput, setUserInput] = useState<string>('');
   const [isFocus, setIsFocus] = useState<boolean>(false);
   const [isZhInput, setIsZhInput] = useState<boolean>(false);
+  const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
 
   const submitCountRef = useRef(0);
 
   const paramKey: string[] = useMemo(() => {
     return appInfo.param_need?.map(i => i.type) || [];
   }, [appInfo.param_need]);
+
+    // 处理语音识别结果
+    const handleVoiceResult = (text: string) => {
+      setUserInput(text);
+    };
+  
+    // 处理语音状态变化
+    const handleVoiceStatusChange = (listening: boolean) => {
+      setIsVoiceListening(listening);
+    };
+  
 
   const onSubmit = async () => {
     submitCountRef.current++;
@@ -129,6 +144,15 @@ const ChatInputPanel: React.ForwardRefRenderFunction<any, { ctrl: AbortControlle
           onCompositionStart={() => setIsZhInput(true)}
           onCompositionEnd={() => setIsZhInput(false)}
         />
+
+        {/* 语音输入组件 */}
+        <VoiceInput
+          className='absolute right-20 bottom-3'
+          onResult={handleVoiceResult}
+          onStatusChange={handleVoiceStatusChange}
+          showStatus={true}
+        />
+
         <Button
           type='primary'
           className={classNames(
