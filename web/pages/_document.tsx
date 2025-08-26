@@ -37,7 +37,7 @@ class MyDocument extends Document {
     return (
       <Html lang='en'>
         <Head>
-          <link rel='icon' href='/favicon.ico' />
+          <link rel='icon' href='/zhuoshi_logo.png' />
           <meta name='description' content='Revolutionizing Database Interactions with Private LLM Technology' />
           <meta property='og:description' content='eosphoros-ai' />
           <meta property='og:title' content='DB-GPT' />

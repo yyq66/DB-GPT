@@ -1,18 +1,38 @@
 import { ChatContext } from '@/app/chat-context';
-import { DarkSvg, SunnySvg } from '@/components/icons';
+import { DarkSvg, SunnySvg, ModelSvg } from '@/components/icons';
 import UserBar from '@/new-components/layout/UserBar';
 import { STORAGE_LANG_KEY, STORAGE_THEME_KEY, STORAGE_USERINFO_KEY } from '@/utils/constants/index';
-import Icon, { GlobalOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
-import { Popover, Tooltip } from 'antd';
-import { ItemType } from 'antd/es/menu/hooks/useItems';
+import Icon, { 
+  GlobalOutlined, 
+  MenuFoldOutlined, 
+  MenuUnfoldOutlined, 
+  PlusOutlined,
+  AppstoreOutlined,
+  ForkOutlined,
+  ConsoleSqlOutlined,
+  PartitionOutlined,
+  BuildOutlined,
+  MessageOutlined,
+  SettingOutlined,
+  CommentOutlined
+} from '@ant-design/icons';
+import { Popover, Tooltip, MenuProps, Button, Dropdown } from 'antd';
 import cls from 'classnames';
 import moment from 'moment';
 import 'moment/locale/zh-cn';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { apiInterceptors, getDialogueList, newDialogue } from '@/client/api';
+import { useRequest } from 'ahooks';
+import { IChatDialogueSchema } from '@/types/chat';
+
+// 引入 ChatSider 组件
+import ChatSider from '@/new-components/chat/sider/ChatSider';
+// 引入 AppDefaultIcon 组件
+import AppDefaultIcon from '@/new-components/common/AppDefaultIcon';
 
 type SettingItem = {
   key: string;
@@ -20,7 +40,7 @@ type SettingItem = {
   icon: ReactNode;
   noDropdownItem?: boolean;
   onClick?: () => void;
-  items?: ItemType[];
+  items?: MenuProps['items'];
   onSelect?: (p: { key: string }) => void;
   defaultSelectedKeys?: string[];
   placement?: 'top' | 'topLeft';
@@ -48,66 +68,85 @@ function smallMenuItemStyle(active?: boolean) {
 }
 
 function SideBar() {
-  // const { chatId, scene, isMenuExpand, refreshDialogList, setIsMenuExpand, setAgent, mode, setMode, adminList } =
-  //   useContext(ChatContext);
   const { isMenuExpand, setIsMenuExpand, mode, setMode, adminList } = useContext(ChatContext);
   const { pathname } = useRouter();
   const { t, i18n } = useTranslation();
-  const [logo, setLogo] = useState<string>('/logo_zh_latest.png');
+  const order = useRef<number>(1);
+  const router = useRouter();
+
+  // 获取会话列表
+  const {
+    data: dialogueList = [],
+    refresh: refreshDialogList,
+    loading: listLoading,
+  } = useRequest(async () => {
+    return await apiInterceptors(getDialogueList());
+  });
 
   const hasAdmin = useMemo(() => {
     const { user_id } = JSON.parse(localStorage.getItem(STORAGE_USERINFO_KEY) || '{}');
     return adminList.some(admin => admin.user_id === user_id);
   }, [adminList]);
 
-  // TODO: unused function
-  // const routes = useMemo(() => {
-  //   const items: RouteItem[] = [
-  //     {
-  //       key: 'app',
-  //       name: t('App'),
-  //       path: '/app',
-  //       icon: <AppstoreOutlined />,
-  //     },
-  //     {
-  //       key: 'flow',
-  //       name: t('awel_flow'),
-  //       icon: <ForkOutlined />,
-  //       path: '/flow',
-  //     },
-  //     {
-  //       key: 'models',
-  //       name: t('model_manage'),
-  //       path: '/models',
-  //       icon: <Icon component={ModelSvg} />,
-  //     },
-  //     {
-  //       key: 'database',
-  //       name: t('Database'),
-  //       icon: <ConsoleSqlOutlined />,
-  //       path: '/database',
-  //     },
-  //     {
-  //       key: 'knowledge',
-  //       name: t('Knowledge_Space'),
-  //       icon: <PartitionOutlined />,
-  //       path: '/knowledge',
-  //     },
-  //     {
-  //       key: 'agent',
-  //       name: t('Plugins'),
-  //       path: '/agent',
-  //       icon: <BuildOutlined />,
-  //     },
-  //     {
-  //       key: 'prompt',
-  //       name: t('Prompt'),
-  //       icon: <MessageOutlined />,
-  //       path: '/prompt',
-  //     },
-  //   ];
-  //   return items;
-  // }, [t]);
+  // 获取与展开状态一致的会话列表数据 - 移到组件顶层
+  const chatItems = useMemo(() => {
+    const list = dialogueList[1] || [];
+    return list.map((item: IChatDialogueSchema) => ({
+      ...item,
+      label: item.user_input || item.select_param || '新会话',
+      key: item.conv_uid,
+      icon: <AppDefaultIcon scene={item.chat_mode} />,
+    }));
+  }, [dialogueList]);
+
+  // 应用管理路由配置
+  const routes = useMemo(() => {
+    const items: RouteItem[] = [
+      {
+        key: 'app',
+        name: t('App'),
+        path: '/construct/app',
+        icon: <AppstoreOutlined />,
+      },
+      {
+        key: 'flow',
+        name: t('awel_flow'),
+        icon: <ForkOutlined />,
+        path: '/construct/flow',
+      },
+      {
+        key: 'models',
+        name: t('model_manage'),
+        path: '/construct/models',
+        icon: <Icon component={ModelSvg} />,
+      },
+      {
+        key: 'database',
+        name: t('Database'),
+        icon: <ConsoleSqlOutlined />,
+        path: '/construct/database',
+      },
+      {
+        key: 'knowledge',
+        name: t('Knowledge_Space'),
+        icon: <PartitionOutlined />,
+        path: '/construct/knowledge',
+      },
+      {
+        key: 'prompt',
+        name: t('Prompt'),
+        icon: <MessageOutlined />,
+        path: '/construct/prompt',
+      },
+      {
+        key: 'dbgpts',
+        name: 'DBGPTS社区',
+        path: '/construct/dbgpts',
+        icon: <BuildOutlined />,
+      },
+    ];
+    return items;
+  }, [t]);
 
   const handleToggleMenu = useCallback(() => {
     setIsMenuExpand(!isMenuExpand);
@@ -126,6 +165,28 @@ function SideBar() {
     if (language === 'en') moment.locale('en');
     localStorage.setItem(STORAGE_LANG_KEY, language);
   }, [i18n]);
+
+  // 创建新会话的处理函数 - Move this here, before it's used
+  const handleCreateNewChat = useCallback(async () => {
+    try {
+      const [err, data] = await apiInterceptors(
+        newDialogue({
+          chat_mode: 'chat_normal',
+          model: 'chatgpt_proxyllm',
+        })
+      );
+      
+      if (!err && data) {
+        // 刷新会话列表
+        refreshDialogList();
+        // 跳转到新创建的会话
+        router.push(`/`);
+      }
+    } catch (error) {
+      console.error('创建会话失败:', error);
+    }
+  }, [refreshDialogList, router]);
+
   const settings = useMemo(() => {
     const items: SettingItem[] = [
       {
@@ -314,206 +375,227 @@ function SideBar() {
     return items;
   }, [t, pathname, hasAdmin]);
 
-  // TODO: unused function
-  // const dropDownRoutes: ItemType[] = useMemo(() => {
-  //   return routes.map<ItemType>(item => ({
-  //     key: item.key,
-  //     label: (
-  //       <Link href={item.path} className='text-base'>
-  //         {item.icon}
-  //         <span className='ml-2 text-sm'>{item.name}</span>
-  //       </Link>
-  //     ),
-  //   }));
-  // }, [routes]);
-
-  // TODO: unused function
-  // const dropDownSettings: ItemType[] = useMemo(() => {
-  //   return settings
-  //     .filter(item => !item.noDropdownItem)
-  //     .map<ItemType>(item => ({
-  //       key: item.key,
-  //       label: (
-  //         <div className='text-base' onClick={item.onClick}>
-  //           {item.icon}
-  //           <span className='ml-2 text-sm'>{item.name}</span>
-  //         </div>
-  //       ),
-  //     }));
-  // }, [settings]);
-
-  // TODO: unused function
-  // const dropDownFunctions: ItemType[] = useMemo(() => {
-  //   return functions.map<ItemType>(item => ({
-  //     key: item.key,
-  //     label: (
-  //       <Link href={item.path} className='text-base'>
-  //         {item.icon}
-  //         <span className='ml-2 text-sm'>{item.name}</span>
-  //       </Link>
-  //     ),
-  //   }));
-  // }, [functions]);
-
-  // TODO: unused function
-  // const handleDelChat = useCallback(
-  //   (dialogue: IChatDialogueSchema) => {
-  //     Modal.confirm({
-  //       title: 'Delete Chat',
-  //       content: 'Are you sure delete this chat?',
-  //       width: '276px',
-  //       centered: true,
-  //       onOk() {
-  //         return new Promise<void>(async (resolve, reject) => {
-  //           try {
-  //             const [err] = await apiInterceptors(delDialogue(dialogue.conv_uid));
-  //             if (err) {
-  //               reject();
-  //               return;
-  //             }
-  //             message.success('success');
-  //             refreshDialogList();
-  //             dialogue.chat_mode === scene && dialogue.conv_uid === chatId && replace('/');
-  //             resolve();
-  //           } catch (e) {
-  //             reject();
-  //           }
-  //         });
-  //       },
-  //     });
-  //   },
-  //   [chatId, refreshDialogList, replace, scene],
-  // );
-
-  // TODO: unused function
-  // const handleClickChatItem = (item: IChatDialogueSchema) => {
-  //   if (item.chat_mode === 'chat_agent' && item.select_param) {
-  //     setAgent?.(item.select_param);
-  //   }
-  // };
-
-  // TODO: unused function
-  // const copyLink = useCallback((item: IChatDialogueSchema) => {
-  //   const success = copy(`${location.origin}/chat?scene=${item.chat_mode}&id=${item.conv_uid}`);
-  //   message[success ? 'success' : 'error'](success ? 'Copy success' : 'Copy failed');
-  // }, []);
-
-  // useEffect(() => {
-  //   queryDialogueList();
-  // }, [queryDialogueList]);
-
   useEffect(() => {
     const language = i18n.language;
     if (language === 'zh') moment.locale('zh-cn');
     if (language === 'en') moment.locale('en');
   }, []);
 
-  useEffect(() => {
-    setLogo(mode === 'dark' ? '/logo_s_latest.png' : '/logo_zh_latest.png');
-  }, [mode]);
 
   if (!isMenuExpand) {
+    // 应用管理下拉菜单项
+    const appManageMenuItems = routes.map(route => ({
+      key: route.key,
+      label: (
+        <Link href={route.path} className="flex items-center px-2 py-1 text-sm">
+          <span className="mr-2">{route.icon}</span>
+          <span>{route.name}</span>
+        </Link>
+      ),
+    }));
+
+    // 设置下拉菜单项
+    const settingsMenuItems = [
+      {
+        key: 'theme',
+        label: (
+          <div className="flex items-center px-2 py-1 text-sm" onClick={handleToggleTheme}>
+            <span className="mr-2">{mode === 'dark' ? <Icon component={DarkSvg} /> : <Icon component={SunnySvg} />}</span>
+            <span>{t('Theme')}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'language',
+        label: (
+          <div className="flex items-center px-2 py-1 text-sm" onClick={handleChangeLang}>
+            <span className="mr-2"><GlobalOutlined /></span>
+            <span>{t('language')}</span>
+          </div>
+        ),
+      },
+    ];
+
+
+    //收起UI界面
     return (
-      <div
-        className='flex flex-col justify-between pt-4 h-screen bg-bar dark:bg-[#232734] animate-fade animate-duration-300'
-        // onMouseEnter={() => {
-        // setIsMenuExpand(true);
-        // }}
-      >
-        <div>
-          <Link href='/' className='flex justify-center items-center pb-4'>
-            <Image src={isMenuExpand ? logo : '/LOGO_SMALL.png'} alt='DB-GPT' width={40} height={40} />
+      <div className='flex flex-col justify-between pt-4 h-screen bg-bar dark:bg-[#232734] animate-fade animate-duration-300 w-24'>
+        <div className='flex flex-col items-center flex-1 min-h-0'>
+          {/* LOGO */}
+          <Link href='/' className='flex justify-center items-center pb-5'>
+            <Image src='/zhuoshi_logo.png' alt='DB-GPT' width={55} height={55} />
           </Link>
-          <div className='flex flex-col gap-4 items-center'>
-            {functions.map(i => (
-              <Link key={i.key} className='h-12 flex items-center' href={i.path}>
-                {i?.icon}
-              </Link>
-            ))}
+          
+          {/* 圆形蓝色+号新建会话按钮 */}
+          <Tooltip title="创建会话" placement='right'>
+            <div 
+              className='w-14 h-14 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center cursor-pointer transition-colors mb-4'
+              onClick={handleCreateNewChat}
+            >
+              <PlusOutlined className='text-white text-lg' />
+            </div>
+          </Tooltip>
+          
+          {/* 会话聊天记录列表 - 与展开状态保持一致 */}
+          <div className='flex-1 w-full overflow-hidden'>
+            {chatItems && chatItems.length > 0 ? (
+              <div className='flex flex-col space-y-2 h-full scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600'>
+                {chatItems.map((item: any, index: number) => (
+                  <Popover
+                    key={item.conv_uid}
+                    content={
+                      <div className='max-w-xs p-2'>
+                        <div className='text-xs text-gray-600 dark:text-gray-400 break-words'>
+                          {item.label}
+                        </div>
+                      </div>
+                    }
+                    placement='right'
+                    trigger='hover'
+                  >
+                    <Link href={`/chat?scene=${item.chat_mode}&id=${item.conv_uid}`}>
+                      <div className={`w-14 h-14 flex items-center justify-center mx-auto rounded-lg transition-colors cursor-pointer ${
+                        pathname.startsWith('/chat') && router.query.id === item.conv_uid
+                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        <AppDefaultIcon scene={item.chat_mode} />
+                      </div>
+                    </Link>
+                  </Popover>
+                ))}
+              </div>
+            ) : (
+              <Tooltip title="聊天记录" placement='right'>
+                <Link href='/chat'>
+                  <div className={`w-14 h-14 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+                    pathname.startsWith('/chat') 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
+                  }`}>
+                    <CommentOutlined className='text-xl' />
+                  </div>
+                </Link>
+              </Tooltip>
+            )}
           </div>
         </div>
-        <div className='py-4'>
-          <UserBar onlyAvatar />
-          {settings
-            .filter(item => item.noDropdownItem)
-            .map(item => (
-              <Tooltip key={item.key} title={item.name} placement='right'>
-                <div className={smallMenuItemStyle()} onClick={item.onClick}>
-                  {item.icon}
-                </div>
-              </Tooltip>
-            ))}
+        
+        {/* 底部控制栏 - 竖立的三个按钮 */}
+        <div className='flex flex-col items-center pb-4 space-y-3 flex-shrink-0'>
+          {/* 应用管理按钮 */}
+          <Dropdown 
+            menu={{ items: appManageMenuItems }} 
+            placement='topLeft'
+            trigger={['hover']}
+          >
+            <Tooltip title="应用管理" placement='right'>
+              <div className={`w-14 h-14 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+                pathname.startsWith('/construct') || pathname.startsWith('/knowledge')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
+              }`}>
+                <AppstoreOutlined className='text-xl' />
+              </div>
+            </Tooltip>
+          </Dropdown>
+          
+          {/* 设置按钮 */}
+          <Dropdown 
+            menu={{ items: settingsMenuItems }} 
+            placement='topLeft'
+            trigger={['hover']}
+          >
+            <Tooltip title="设置" placement='right'>
+              <div className='w-14 h-14 flex items-center justify-center rounded-lg transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'>
+                <SettingOutlined className='text-xl' />
+              </div>
+            </Tooltip>
+          </Dropdown>
+          
+          {/* 收起/展开按钮 */}
+          <Tooltip title={t('Show_Sidebar')} placement='right'>
+            <div 
+              className='w-14 h-14 flex items-center justify-center rounded-lg transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'
+              onClick={handleToggleMenu}
+            >
+              <MenuUnfoldOutlined className='text-xl' />
+            </div>
+          </Tooltip>
         </div>
       </div>
     );
   }
 
+  //展开状态
   return (
     <div
-      className='flex flex-col justify-between h-screen px-4 pt-4 bg-bar dark:bg-[#232734] animate-fade animate-duration-300'
-      // onMouseLeave={() => {
-      //   setIsMenuExpand(false);
-      // }}
+      className='flex flex-col justify-between h-screen px-4 pt-2 bg-bar dark:bg-[#232734] animate-fade animate-duration-300'
     >
-      <div>
+      <div className='flex-1 flex flex-col min-h-0'>
         {/* LOGO */}
-        <Link href='/' className='flex items-center justify-center p-2 pb-4'>
-          <Image src={isMenuExpand ? logo : '/LOGO_SMALL.png'} alt='DB-GPT' width={180} height={40} />
+        <Link href='/' className='flex items-center p-2 pb-4'>
+          <Image src='/banner_logo.webp' alt='DB-GPT' width={200} height={40} />
         </Link>
-        {/* functions */}
-        <div className='flex flex-col gap-4'>
-          {functions.map(item => {
-            return (
-              <Link
-                href={item.path}
-                className={cls(
-                  'flex items-center w-full h-12 px-4 cursor-pointer hover:bg-[#F1F5F9] dark:hover:bg-theme-dark hover:rounded-xl',
-                  {
-                    'bg-white rounded-xl dark:bg-black': item.isActive,
-                  },
-                )}
-                key={item.key}
-              >
-                <div className='mr-3'>{item.icon}</div>
-                <span className='text-sm'>{t(item.name as any)}</span>
-              </Link>
-            );
-          })}
+        
+        {/* 创建会话按钮 */}
+        <div className='mb-4'>
+          <Button 
+            type='primary' 
+            icon={<PlusOutlined />} 
+            onClick={handleCreateNewChat}
+            className='w-full h-11 flex items-center justify-center text-sm font-medium'
+            size='middle'
+          >
+            {t('create_conversation')}
+          </Button>
+        </div>
+        
+        {/* ChatSider 组件 - 放在创建会话按钮下方 */}
+        <div className='flex-1 overflow-hidden'>
+          <ChatSider
+            dialogueList={dialogueList}
+            listLoading={listLoading}
+            historyLoading={false}
+            order={order}
+            refresh={refreshDialogList}
+          />
         </div>
       </div>
 
-      {/* Settings */}
-      <div className='pt-4'>
-        <span className={cls('flex items-center w-full h-12 px-4 bg-[#F1F5F9] dark:bg-theme-dark rounded-xl')}>
-          <div className='mr-3 w-full'>
-            <UserBar />
+      {/* 底部固定区域 - 应用管理和设置 */}
+      <div className='flex-shrink-0'>
+        {/* 应用管理列表 */}
+        <div className='border-t border-gray-200 dark:border-gray-700 pt-4'>
+          <div className='max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600'>
+            <div className='space-y-1'>
+              {routes.map(route => (
+                <Link key={route.key} href={route.path}>
+                  <div className={`flex items-center px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    pathname.startsWith(route.path) ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'
+                  }`}>
+                    <span className='mr-3 text-base'>{route.icon}</span>
+                    <span className='flex-1'>{route.name}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </span>
-        <div className='flex items-center justify-around py-4 mt-2 border-t border-dashed border-gray-200 dark:border-gray-700'>
-          {settings.map(item => (
-            <div key={item.key}>
-              <Popover content={item.name}>
-                <div className='flex-1 flex items-center justify-center cursor-pointer text-xl' onClick={item.onClick}>
-                  {item.icon}
-                </div>
-              </Popover>
-              {/* {item.items ? (
-                <Dropdown
-                  menu={{ items: item.items, selectable: true, onSelect: item.onSelect, defaultSelectedKeys: item.defaultSelectedKeys }}
-                  placement={item.placement || 'top'}
-                  arrow
-                >
-                  <span onClick={item.onClick}>{item.icon}</span>
-                </Dropdown>
-              ) : (
+        </div>
+
+        {/* Settings */}
+        <div className='pt-4'>
+          <div className='flex items-center justify-around py-4 mt-2 border-t border-dashed border-gray-200 dark:border-gray-700'>
+            {settings.map(item => (
+              <div key={item.key}>
                 <Popover content={item.name}>
-                  <div className="flex-1 flex items-center justify-center cursor-pointer text-xl" onClick={item.onClick}>
+                  <div className='flex-1 flex items-center justify-center cursor-pointer text-xl' onClick={item.onClick}>
                     {item.icon}
                   </div>
                 </Popover>
-              )} */}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

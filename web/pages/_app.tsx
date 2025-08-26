@@ -99,12 +99,12 @@ function LayoutWrapper({ children }: { children: React.ReactNode }) {
           <meta name='viewport' content='initial-scale=1.0, width=device-width, maximum-scale=1' />
         </Head>
         {router.pathname !== '/construct/app/extra' && (
-          <div className={classNames('transition-[width]', isMenuExpand ? 'w-60' : 'w-20', 'hidden', 'md:block')}>
+          <div className={classNames('transition-[width]', isMenuExpand ? 'w-64' : 'w-34', 'hidden', 'md:block')}>
             <SideBar />
           </div>
         )}
         <div className='flex flex-col flex-1 relative overflow-hidden'>{children}</div>
-        <FloatHelper />
+        {/* <FloatHelper /> */}
       </div>
     );
   };

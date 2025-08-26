@@ -1,26 +1,34 @@
 import { ChatContext } from '@/app/chat-context';
 import { apiInterceptors, getAppInfo, getChatHistory, getDialogueList } from '@/client/api';
 import PromptBot from '@/components/common/prompt-bot';
+// import { DigitalHumanRef } from '@/components/chat/DigitalHuman/DigitalHuman';
 import useChat from '@/hooks/use-chat';
 import ChatContentContainer from '@/new-components/chat/ChatContentContainer';
 import ChatDefault from '@/new-components/chat/content/ChatDefault';
 import ChatInputPanel from '@/new-components/chat/input/ChatInputPanel';
-import ChatSider from '@/new-components/chat/sider/ChatSider';
+// 移除 ChatSider 导入
 import { IApp } from '@/types/app';
 import { ChartData, ChatHistoryResponse, IChatDialogueSchema, UserChatContent } from '@/types/chat';
 import { getInitMessage, transformFileUrl } from '@/utils';
 import { useAsyncEffect, useRequest } from 'ahooks';
-import { Flex, Layout, Spin } from 'antd';
+import { Flex, Layout, Spin, Button, message } from 'antd';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, Suspense } from 'react';
+
+// const DigitalHuman = React.lazy(() => import('@/components/chat/DigitalHuman/DigitalHuman'));
+
+import { DigitalHumanRef } from '@/new-components/chat/digital-human/DigitalHuman';
+
+
+const DigitalHuman = React.lazy(() => import('@/new-components/chat/digital-human/DigitalHuman'));
 
 const DbEditor = dynamic(() => import('@/components/chat/db-editor'), {
   ssr: false,
 });
 const ChatContainer = dynamic(() => import('@/components/chat/chat-container'), { ssr: false });
 
-const { Content } = Layout;
+const { Content, Sider } = Layout;
 
 interface ChatContentProps {
   history: ChatHistoryResponse; // 会话记录列表
@@ -62,18 +70,18 @@ export const ChatContentContext = createContext<ChatContentProps>({
   maxNewTokensValue: 1024,
   resourceValue: {},
   modelValue: '',
-  setModelValue: () => {},
-  setResourceValue: () => {},
-  setTemperatureValue: () => {},
-  setMaxNewTokensValue: () => {},
-  setAppInfo: () => {},
-  setAgent: () => {},
-  setCanAbort: () => {},
-  setReplyLoading: () => {},
-  refreshDialogList: () => {},
-  refreshHistory: () => {},
-  refreshAppInfo: () => {},
-  setHistory: () => {},
+  setModelValue: () => { },
+  setResourceValue: () => { },
+  setTemperatureValue: () => { },
+  setMaxNewTokensValue: () => { },
+  setAppInfo: () => { },
+  setAgent: () => { },
+  setCanAbort: () => { },
+  setReplyLoading: () => { },
+  refreshDialogList: () => { },
+  refreshHistory: () => { },
+  refreshAppInfo: () => { },
+  setHistory: () => { },
   handleChat: () => Promise.resolve(),
 });
 
@@ -92,12 +100,13 @@ const Chat: React.FC = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const order = useRef<number>(1);
-
-  // Create ref for ChatInputPanel to control input value externally
   const chatInputRef = useRef<any>(null);
-
-  // Use ref to store the selected prompt_code
   const selectedPromptCodeRef = useRef<string | undefined>(undefined);
+
+  // 数字人引用
+  const digitalHumanRef = useRef<DigitalHumanRef>(null);
+
+  const [isTTSPlaying, setIsTTSPlaying] = useState<boolean>(false);
 
   const [history, setHistory] = useState<ChatHistoryResponse>([]);
   const [chartsData] = useState<Array<ChartData>>();
@@ -134,13 +143,14 @@ const Chat: React.FC = () => {
   }, [chatId, scene]);
 
   // 获取会话列表
-  const {
-    data: dialogueList = [],
-    refresh: refreshDialogList,
-    loading: listLoading,
-  } = useRequest(async () => {
-    return await apiInterceptors(getDialogueList());
-  });
+  // 移除 dialogueList 相关的状态管理
+  // const {
+  //   data: dialogueList = [],
+  //   refresh: refreshDialogList,
+  //   loading: listLoading,
+  // } = useRequest(async () => {
+  //   return await apiInterceptors(getDialogueList());
+  // });
 
   // 获取应用详情
   const { run: queryAppInfo, refresh: refreshAppInfo } = useRequest(
@@ -161,9 +171,9 @@ const Chat: React.FC = () => {
 
   // 列表当前活跃对话
   const currentDialogue = useMemo(() => {
-    const [, list] = dialogueList;
-    return list?.find(item => item.conv_uid === chatId) || ({} as IChatDialogueSchema);
-  }, [chatId, dialogueList]);
+    // 由于对话列表现在由左侧边栏管理，这里返回空对象
+    return {} as IChatDialogueSchema;
+  }, [chatId]);
 
   useEffect(() => {
     const initMessage = getInitMessage();
@@ -190,6 +200,12 @@ const Chat: React.FC = () => {
   });
 
   // 会话提问
+  // 添加实时朗读相关状态
+  // const lastProcessedMessageRef = useRef<string>('');
+  // const realtimeProcessingRef = useRef<boolean>(false);
+
+  // const showDigitalHuman = true; // 始终显示数字人
+
   const handleChat = useCallback(
     (content: UserChatContent, data?: Record<string, any>) => {
       return new Promise<void>(resolve => {
@@ -298,15 +314,43 @@ const Chat: React.FC = () => {
               tempHistory[index].thinking = false;
             }
             setHistory([...tempHistory]);
+
+            // 移除实时朗读处理，只在完成时进行朗读
           },
+          // 在 onDone 回调中
           onDone: () => {
             setReplyLoading(false);
             setCanAbort(false);
+
+            // AI回答完成后触发TTS播报
+            if (tempHistory[index] && tempHistory[index].context) {
+              const textContent = extractTextFromMessage(tempHistory[index].context);
+              if (textContent && digitalHumanRef.current) {
+                digitalHumanRef.current.setText(textContent)
+                digitalHumanRef.current.speakText(textContent);
+              }
+            }
+
+            // 完成时进行朗读 - 使用新的 speakAfterComplete 方法
+            // if (digitalHumanRef.current) {
+            //   const finalMessage = tempHistory[index].context;
+            //   if (finalMessage) {
+            //     console.log('大模型回答完成，开始朗读，内容长度:', finalMessage.length);
+            //     digitalHumanRef.current.speakAfterComplete(finalMessage).catch(error => {
+            //       console.error('完成后TTS播放失败:', error);
+            //     });
+            //   }
+            // }
+
             resolve();
           },
           onClose: () => {
             setReplyLoading(false);
             setCanAbort(false);
+
+            // 移除重复的TTS调用
+            // 关闭时不再进行朗读，避免重复播放
+
             resolve();
           },
           onError: message => {
@@ -315,6 +359,7 @@ const Chat: React.FC = () => {
             tempHistory[index].context = message;
             tempHistory[index].thinking = false;
             setHistory([...tempHistory]);
+
             resolve();
           },
         });
@@ -322,6 +367,19 @@ const Chat: React.FC = () => {
     },
     [chatId, history, modelValue, chat, scene],
   );
+
+  // 提取消息中的纯文本内容
+  const extractTextFromMessage = (context: string): string => {
+    return context.replace(/```{3,}vis-thinking[\s\S]*?```{3,}/g, '') // 移除vis-thinking代码块
+      .replace(/```[\s\S]*?```/g, '') // 移除代码块
+      .replace(/`[^`]*`/g, '') // 移除行内代码
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // 移除粗体格式
+      .replace(/\*([^*]+)\*/g, '$1') // 移除斜体格式
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // 移除链接格式
+      .replace(/<[^>]*>/g, '') // 移除HTML标签
+      .replace(/\n+/g, ' ') // 将换行替换为空格
+      .trim();
+  };
 
   useAsyncEffect(async () => {
     // 如果是默认小助手，不获取历史记录
@@ -342,6 +400,45 @@ const Chat: React.FC = () => {
     }
   }, [isChatDefault]);
 
+  // 监听聊天历史变化，自动播放最新的AI回复
+  // useEffect(() => {
+  //   if (!showDigitalHuman || !digitalHumanRef.current || history.length === 0) {
+  //     return;
+  //   }
+
+  //   // 获取最新的AI回复
+  //   const latestMessage = history[history.length - 1];
+  //   if (latestMessage &&
+  //     latestMessage.role === 'view' &&
+  //     latestMessage.context &&
+  //     !latestMessage.thinking) { // 确保不是思考状态
+
+  //     // 延迟一下再播放，确保消息已经完全显示
+  //     const timer = setTimeout(() => {
+  //       if (digitalHumanRef.current && latestMessage.context) {
+  //         digitalHumanRef.current.speak(latestMessage.context).catch(error => {
+  //           console.error('自动TTS播放失败:', error);
+  //         });
+  //       }
+  //     }, 500);
+
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [history, showDigitalHuman]);
+
+  // 处理语音输入 - 直接填入聊天输入框
+  // const handleVoiceInput = useCallback((text: string) => {
+  //   if (chatInputRef.current?.setUserInput) {
+  //     chatInputRef.current.setUserInput(text);
+  //     message.success(`语音输入完成: ${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`);
+  //   }
+  // }, []);
+
+  // 处理TTS状态变化
+  // const handleTTSStatusChange = useCallback((isPlaying: boolean) => {
+  //   setIsTTSPlaying(isPlaying);
+  // }, []);
+
   const contentRender = () => {
     if (scene === 'chat_dashboard') {
       return isContract ? <DbEditor /> : <ChatContainer />;
@@ -352,11 +449,42 @@ const Chat: React.FC = () => {
         </Content>
       ) : (
         <Spin spinning={historyLoading} className='w-full h-full m-auto'>
-          <Content className='flex flex-col h-screen'>
-            <ChatContentContainer ref={scrollRef} className='flex-1' />
-            {/* Pass ref to ChatInputPanel for external control */}
-            <ChatInputPanel ref={chatInputRef} ctrl={ctrl} />
-          </Content>
+          <div className='h-screen flex flex-row flex-1'>
+            {/* <div 
+              className='flex bg-white'
+              style={{ 
+                width: '500px',
+                height: '100vh'
+              }}
+            >
+              <DigitalHuman 
+                ref={digitalHumanRef}
+                className=''
+                onVoiceInput={handleVoiceInput}
+                onTTSStatusChange={handleTTSStatusChange}
+              />
+            </div> */}
+            {/* 数字人区域 */}
+            {/* <div className='w-96 h-full flex flex-col'> */}
+            <div className='w-[30vh]'>
+
+              {/* <div className='flex-1 flex items-center justify-center pl-12'> */}
+              <div className=''>
+                <Suspense fallback={<h1>数字人加载中...</h1>}>
+                  <DigitalHuman
+                    ref={digitalHumanRef}
+                    onSpeakStart={() => console.log('开始播报')}
+                    onSpeakEnd={() => console.log('播报结束')}
+                  />
+                </Suspense>
+              </div>
+            </div>
+            {/* 主聊天区域 - 占满整个宽度 */}
+            <Content className='flex flex-col flex-1 h-full'>
+              <ChatContentContainer ref={scrollRef} className='flex-1' />
+              <ChatInputPanel ref={chatInputRef} ctrl={ctrl} />
+            </Content>
+          </div>
         </Spin>
       );
     }
@@ -386,32 +514,22 @@ const Chat: React.FC = () => {
         setCanAbort,
         setReplyLoading,
         handleChat,
-        refreshDialogList,
+        refreshDialogList: () => { }, // 空函数，因为现在由 side-bar 管理
         refreshHistory,
         refreshAppInfo,
         setHistory,
       }}
     >
-      <Flex flex={1}>
-        <Layout className='bg-gradient-light bg-cover bg-center dark:bg-gradient-dark'>
-          <ChatSider
-            refresh={refreshDialogList}
-            dialogueList={dialogueList}
-            listLoading={listLoading}
-            historyLoading={historyLoading}
-            order={order}
-          />
+      <Flex flex={1} className='bg-[url(/pictures/poc_tjsl_bg.jpg)] bg-cover bg-center'>
+        <Layout className='bg-transparent '>
+          {/* 移除 ChatSider 组件 */}
           <Layout className='bg-transparent'>
             {contentRender()}
-            {/* Render PromptBot at the bottom right */}
             <PromptBot
               submit={prompt => {
-                // For chat_dashboard, only store prompt_code in localStorage
-                // The input filling will be handled by the CompletionInput's PromptBot
                 if (scene === 'chat_dashboard') {
                   localStorage.setItem(`dbgpt_prompt_code_${chatId}`, prompt.prompt_code);
                 } else {
-                  // For other scenes, fill input and store prompt_code
                   chatInputRef.current?.setUserInput?.(prompt.content);
                   selectedPromptCodeRef.current = prompt.prompt_code;
                   localStorage.setItem(`dbgpt_prompt_code_${chatId}`, prompt.prompt_code);
@@ -427,3 +545,4 @@ const Chat: React.FC = () => {
 };
 
 export default Chat;
+

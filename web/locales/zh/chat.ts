@@ -7,6 +7,7 @@ export interface Resources {
 }
 
 export const ChatZh: Resources['translation'] = {
+  create_conversation: '创建会话',
   dialog_list: '对话列表',
   delete_chat: '删除会话',
   delete_chat_confirm: '您确认要删除会话吗？',
